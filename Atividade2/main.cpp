@@ -10,7 +10,7 @@
 
 class MeuArquivo {
 public:
-    struct cabecalho { int quantidade;int disponivel; } cabecalho;
+    struct cabecalho { int quantidade; int disponivel; } cabecalho;
     struct registro { int tamanho_bytes; char* palavra; } registro; // guarda o tamamn
 
     // construtor: abre arquivo. Essa aplicacao deveria ler o arquivo se existente ou criar um novo.
@@ -84,7 +84,7 @@ public:
                     atual = prox;
                 }else{
                     // registro pode ser inserido neste espaço
-                     fseek(fd,prox,SEEK_SET); // seta o ponteiro para o inicio do registro disponivel;
+                     fseek(fd,atual,SEEK_SET); // seta o ponteiro para o inicio do registro disponivel;
                      fwrite(&(this->registro.tamanho_bytes),sizeof(int),1,fd);
                      fwrite(this->registro.palavra,this->registro.tamanho_bytes,1,fd);
                      atualizaFilaInsercao(anterior,prox); //atualiza o registro anterior a apontar para o proximo registro;
@@ -95,7 +95,7 @@ public:
     }
 
     // Marca registro como removido, atualiza lista de disponíveis, incluindo o cabecalho
-    void removePalavra(int offset) {
+    void removePalavra(int offset){
         fseek(fd,offset,SEEK_SET); // seta o ponteiro para o registro
         char terminador = '*';
 
