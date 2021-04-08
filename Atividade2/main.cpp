@@ -5,22 +5,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#define HEADER_OFFSET 0
 
-#define BUFFER_SIZE 50
 
 class MeuArquivo {
 public:
-
-    struct cabecalho { int quantidade; int disponivel; } cabecalho;
-
-    struct registro { char tamanho; char *palavra; } registro;
+    struct cabecalho { int quantidade;int disponivel; } cabecalho;
+    struct registro { int tamanho_bytes; char* palavra; } registro; // guarda o tamamn
 
     // construtor: abre arquivo. Essa aplicacao deveria ler o arquivo se existente ou criar um novo.
-    // Entretando recriaremos o arquivo a cada execucao ("w+").
+    // Entretando recriaremos o arquivo a cada execucao ("w+"). wb+ para podermos trabalhar melhor com binarios
     MeuArquivo() {
-        this->cabecalho.quantidade = 0;
-        this->cabecalho.disponivel = -1;
-        fd = fopen("dados.dat","w+");
+        fd = fopen("dados.dat","wb+");
+        this->cabecalho.disponivel = -1; //  inicia o cabeçalho
+        this->cabecalho.quantidade = 0; // inicia o cabeçalho
+        fwrite(&cabecalho,2*sizeof(int),1,fd);  // escreve o cabeçalho no arquivo
     }
 
     // Destrutor: fecha arquivo
@@ -28,67 +27,96 @@ public:
         fclose(fd);
     }
 
-    void atualizaCabecalho(int novaQuantidade,int novoDisponivel) {
-        this->cabecalho.quantidade = novaQuantidade;
-        this->cabecalho.disponivel = novoDisponivel;
+    void atualizaCabecalho(int quantidade, int disponivel){
+        long  int pos_atual = ftell(fd); //  salva posição atual no arquivo;
+        fseek(fd,0,SEEK_SET); //  volta o ponteiro para a posição do cabeçalho
+        this->cabecalho.disponivel = quantidade; //  atualiza o cabeçalho
+        this->cabecalho.quantidade = disponivel; // atualiza o cabeçalho
+        fwrite(&cabecalho,2*sizeof(int),1,fd);  // escreve o cabeçalho atualizado
+        fseek(fd,pos_atual,SEEK_SET); // retorna o ponteiro para a posição original
 
-        rewind(this->fd);
+    }
 
+    void atualizaFilaInsercao(int anterior,int prox){
+        if(anterior == -1){
+            // o anterior é o cabecalho
+            atualizaCabecalho(this->cabecalho.quantidade+1,prox);
+        }else{
 
-        //Atualizar primeira linha do arquivo para sincronizar o cabecalho inMemory lá
+            fseek(fd,anterior+sizeof(int)+1,SEEK_SET); // seta o ponteiro para o inicio do registro disponivel anterior
+            fwrite(&prox,sizeof(int),1,fd);
+        }
     }
 
     // Insere uma nova palavra, consulta se há espaco disponível ou se deve inserir no final
-    void inserePalavra(char *palavra) {
+    void inserePalavra(char *palavra){
         this->substituiBarraNporBarraZero(palavra); // funcao auxiliar substitui terminador por \0
 
-        // implementar aqui
-        //fwrite(&registro.tamanho,sizeof(char),1,this->fd);
-        //fwrite(registro.palavra,registro.tamanho,1,this->fd);
+        this->registro.palavra = palavra; // atribui o ponteiro da palavra para o ponteiro palavra no registro
+        this->registro.tamanho_bytes = strlen(palavra) + 1; // salva o tamanho da palavra em bytes (cada char é 1 byte) + 1 para o terminador de string
 
-        fwrite(palavra,sizeof(palavra),1,this->fd);
-        //fprintf(this->fd, "%d%s\n",strlen(palavra),palavra);
+            int anterior = -1;
+            int atual = this->cabecalho.disponivel;
+            int prox = -1;
+            int tamanho_espaco = 0;
+
+            while(1){
+                if(atual == -1){
+                    //insere o registro no fim do arquivo
+
+                    fseek(fd,0,SEEK_END); // move o ponteiro para o fim do arquivo;
+                    fwrite(&(this->registro.tamanho_bytes),sizeof(int),1,fd);
+                    fwrite(this->registro.palavra,this->registro.tamanho_bytes,1,fd);
+                    atualizaCabecalho(this->cabecalho.quantidade+1,atual);
+                    break;
+                }
+
+                fseek(fd,atual,SEEK_SET); // seta o ponteiro para o atual espaço disponivel;
+                fread(&tamanho_espaco,sizeof(int),1,fd);
+
+                fseek(fd,1,SEEK_CUR); //pula 1 byte referente ao asterisco
+                fread(&prox,sizeof(int),1,fd); // le o offset do proximo registro disponivel
+
+                if(tamanho_espaco< this->registro.tamanho_bytes)
+                {
+                    // registro não cabe neste espaço vazio necessario ir para o proximo
+                    anterior = atual;
+                    atual = prox;
+                }else{
+                    // registro pode ser inserido neste espaço
+                     fseek(fd,prox,SEEK_SET); // seta o ponteiro para o inicio do registro disponivel;
+                     fwrite(&(this->registro.tamanho_bytes),sizeof(int),1,fd);
+                     fwrite(this->registro.palavra,this->registro.tamanho_bytes,1,fd);
+                     atualizaFilaInsercao(anterior,prox); //atualiza o registro anterior a apontar para o proximo registro;
+                     break;
+                }
+            }
+
     }
 
     // Marca registro como removido, atualiza lista de disponíveis, incluindo o cabecalho
     void removePalavra(int offset) {
-        // implementar aqui
+        fseek(fd,offset,SEEK_SET); // seta o ponteiro para o registro
+        char terminador = '*';
 
-        char *palavra = new char[50];
-        while (!feof(this->fd)) {
-            fgets(palavra,50,this->fd);
-            printf(palavra);
-        }
+        fseek(fd,sizeof(int),SEEK_CUR); // seta o ponteiro para depois do tamanho do registro;
+        fwrite(&terminador,sizeof(char),1,fd); // marca o registro com o terminador
+        fwrite(&(this->cabecalho.disponivel),sizeof(int),1,fd); // aponta para o proximo registro vazio disponivel que o cabeçalho apontava
+
+        atualizaCabecalho(this->cabecalho.quantidade-1,offset); // cabeçalho agora aponta para este registro
+
     }
 
     // BuscaPalavra: retorno é o offset para o registro
     // Nao deve considerar registro removido
-
     int buscaPalavra(char *palavra) {
         this->substituiBarraNporBarraZero(palavra); // funcao auxiliar substitui terminador por \0
 
-        char line_buffer[4*BUFFER_SIZE];
-        char word_buffer[BUFFER_SIZE];
-        char ch;
-        int word_count;
-        int line_count;
-        int equal_flag = 0;
-        int offset;
+        // implementar aqui
 
-        rewind(this->fd);
-
-        while((ch=fgetc(this->fd))!=EOF){
-            // Read Lines
-            word_count = 0;
-            line_count = 0;
-            offset = 1; // >0 se encontrar
-            return offset;
-
-        }
         // retornar -1 caso nao encontrar
         return -1;
     }
-
 
 private:
     // descritor do arquivo é privado, apenas métodos da classe podem acessa-lo
@@ -114,7 +142,6 @@ int main(int argc, char** argv) {
 
     // criando arquivo de dados
     MeuArquivo *arquivo = new MeuArquivo();
-    arquivo->inserePalavra(palavra);
     while (!feof(f)) {
         fgets(palavra,50,f);
         arquivo->inserePalavra(palavra);
@@ -138,10 +165,6 @@ int main(int argc, char** argv) {
             printf("Palavra: ");
             scanf("%s",palavra);
             int offset = arquivo->buscaPalavra(palavra);
-            // Se existir offset, existe a palavra dentro do arquivo
-            if (offset == -1) {
-                printf("Palavra não existente, tente novamente.\n\n");
-            }
             if (offset >= 0) {
                 arquivo->removePalavra(offset);
                 printf("Removido.\n\n");
