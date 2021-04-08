@@ -148,9 +148,10 @@ public:
                 }
             }else{
                 //espaço removido
-                fseek(fd,this->registro.tamanho_bytes,SEEK_CUR); //segue para o proximo registro
+                fseek(fd,this->registro.tamanho_bytes-1,SEEK_CUR); //segue para o proximo registro
             }
             offset = ftell(fd); // salva o offset do registro novo;
+            free(Buffer);
         }
         // arquivo chegou ao fim e o registro nao foi encontrado
 
@@ -215,9 +216,9 @@ int main(int argc, char** argv) {
             scanf("%s",palavra);
             int offset = arquivo->buscaPalavra(palavra);
             if (offset >= 0)
-                printf("Encontrou %s na posição %d\n\n",palavra,offset);
+                printf("Encontrou %s na posicao %d\n\n",palavra,offset);
             else
-                printf("Não encontrou %s\n\n",palavra);
+                printf("Nao encontrou %s\n\n",palavra);
         }
         if (opcao != '4') opcao = getchar();
     } while (opcao != '4');
