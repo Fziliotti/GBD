@@ -1,7 +1,9 @@
 /*
  * File:   main.cpp
  */
-
+//Alunos :
+//Fabrício Fernandes Ziliotti | Matricula: 11711BCC020
+//Felipe Augusto Ferreira de Castro | Matricula: 11711BCC033
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,32 +36,63 @@ void imprimeLinha(int offset,FILE *f) {
 class listaInvertida {
 public:
     typedef struct registro_listaInvertida{int offset;int prox;}LI_REGISTRO; //offset da palavra, prox é o offset do proximo registro da lista
-    typedef struct registro_listaSecundaria{char palavra[100];int quantidade;int lista_offset;LS_REGISTRO* prox;}LS_REGISTRO; //lista_offset é o offset do primero registro da lista invertida,  prox é um ponteiro pra o proximo item da lista de chaves
+    typedef struct registro_listaSecundaria{char palavra[100];int quantidade;int lista_offset;struct registro_listaSecundaria* prox;}LS_REGISTRO; //lista_offset é o offset do primero registro da lista invertida,  prox é um ponteiro pra o proximo item da lista de chaves
     FILE* f;
     LS_REGISTRO* primeiro_registro = NULL; // aponta para o a cabeça da lista de chaves secundarias
 
     // construtor
-    listaInvertida(){ f=open("listainvertida.dat","wb+"); }
+    listaInvertida(){ f = fopen("listainvertida.dat","wb+"); }
     // destrutor
-    ~listaInvertida(){destroi_listasecundaria();close(f);}
+    ~listaInvertida(){destroi_listasecundaria();fclose(f);}
 
     // adiciona palavra na estrutura
-    void adiciona(char *palavra, int offset) {
-        if(primeiro_registro == NULL){
-            primeiro_registro =  novo_LS_REGISTRO();
-            primeiro_registro->palavra =  *palavra;
-        }
+    void adiciona(char *palavra, int offset){
+         if(primeiro_registro == NULL){
+                primeiro_registro = novo_LS_REGISTRO();
+                strcpy(primeiro_registro->palavra,palavra);
+                if(!insere_lista_Invertida(primeiro_registro,offset)){printf("ERRO AO INSERIR NA LISTA!! ENCERRANDO FUNÇAO..."); exit(1);}
+                return;
+             }
 
         // vamos iterar na lista secundaria para encontrar o registro correto
         LS_REGISTRO* aux =  primeiro_registro;
+        LS_REGISTRO* ant =  NULL;
+        int cmp;
         while(1){
-            if(aux->palavra == (*palavra))
-            {
-                // a palavra ja esta na lista
-
+            cmp = strcmp(palavra,aux->palavra);
+            if(cmp==0){
+                //encontro a palavra
+                break;
             }
-        }
+             //checa se é o fim da lista
+            if(aux->prox == NULL){
+                //fim da lista;
+                aux->prox = novo_LS_REGISTRO();
+                strcpy(aux->prox->palavra,palavra);
+                aux = aux->prox;
+                break;
+            }
 
+            if(cmp<0){
+                // se for menor e ainda nao encontrou significa que a palavra nao esta na lista
+                LS_REGISTRO* novo = novo_LS_REGISTRO();
+                strcpy(novo->palavra,palavra);
+                if(ant!=NULL){
+                    ant->prox = novo;
+                }else{
+                    primeiro_registro = novo;
+                }
+                novo->prox = aux;
+                aux = novo;
+                break;
+            }
+            ant = aux;
+            aux = aux->prox;
+
+
+        }
+        // o registro a inserir a palavra sempre sai em aux
+        if(!insere_lista_Invertida(aux,offset)){printf("ERRO AO INSERIR NA LISTA!! ENCERRANDO FUNÇAO..."); exit(1);} //insere o novo offset para a palavra
     }
     // realiza busca, retornando vetor de offsets que referenciam a palavra
     int * busca(char *palavra, int *quantidade) {
@@ -99,10 +132,10 @@ private:
     }
 
     //cria um novo Registro da lista secundaria
-    LS_REGISTRO novo_LS_REGISTRO(){
+    LS_REGISTRO* novo_LS_REGISTRO(){
         LS_REGISTRO* registro;
-        registro = malloc(sizeof(LS_REGISTRO));
-        registro->lista_offset = NULL;
+        registro = (LS_REGISTRO*)malloc(sizeof(LS_REGISTRO));
+        registro->lista_offset = -1;
         registro->quantidade = 0;
         registro->prox = NULL;
         return registro;
@@ -117,35 +150,34 @@ private:
         r.offset = offset;
         r.prox = -1;
 
-        int li_registro_offset = registro->lista_offset;
-        LI_REGISTRO aux;
+        int registro_atual = registro->lista_offset;
+        LI_REGISTRO atual;
         LI_REGISTRO ant;
         int ant_offset= -1;
         while(1){
-            fseek(f,li_registro_offset,SEEK_SET);
-            fread(&aux,sizeof(LI_REGISTRO),1,f);
-            if(offset<=aux.offset){
+            if(registro_atual == -1){break;} // fim da lista
+            fseek(f,registro_atual,SEEK_SET);
+            fread(&atual,sizeof(LI_REGISTRO),1,f);
+            if(offset<=atual.offset){
                 break;
             }
-            ant = aux;
-            ant_offset = li_registro_offset; // registro anterior
-            if(aux.prox == -1){break;}
-            li_registro_offset = aux.prox; //proximo registro
+            ant = atual;
+            ant_offset = registro_atual; // registro atual agor a é o anterior
+            registro_atual = atual.prox; //proximo registro
 
         }
-        r.prox = li_registro_offset;
-        fseek(f,0,SEEK_END);
+        r.prox = registro_atual; // o registro a ser inserio aponta para o registro atual na posiçao
+        fseek(f,0,SEEK_END); // seek pro final do arquivo
+        int r_offset = ftell(f);
+        fwrite(&r,sizeof(LI_REGISTRO),1,f);//escreve o registro a ser inserido no fim do arquivo
         if(ant_offset!=-1){
-            ant.prox = ftell(f); // pega a posção onde o registro atual vai ser escrito;
-        }else{
-            registro->lista_offset = ftell(f);
-        }
-        fwrite(&r,sizeof(LI_REGISTRO),1,f);
-        if(ant_offset!=-1){
+            ant.prox = r_offset;
             fseek(f,ant_offset,SEEK_SET);
-            fwrite(&ant,sizeof(LI_REGISTRO),1,f);
+            fwrite(&ant,sizeof(LI_REGISTRO),1,f); // escreve o registro anterior se necessário
+        }else{
+            registro->lista_offset = r_offset;// caso o registro inserio seja o primeiro da lista faz apontar para a cabeça que esta na lista de chave secundaria
         }
-
+        registro->quantidade++;
         return 1;
 
     }
@@ -173,7 +205,7 @@ int main(int argc, char** argv) {
             removePontuacao(palavra);
             // desconsiderar palavras que sao marcadores do arquivo
             if (!((palavra[0] == '#') || (palavra[0] == '[') || ((palavra[0] >= '0') && (palavra[0] <= '9')))) {
-                //printf("%d %s\n", offset,palavra); fflush(stdout); // debug :-)
+                printf("%d %s\n", offset,palavra); fflush(stdout); // debug :-)
                 lista.adiciona(palavra, offset);
                 contadorDePalavras++;
                 if (contadorDePalavras % 1000 == 0) { printf(".");  fflush(stdout); }
