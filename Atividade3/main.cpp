@@ -96,21 +96,23 @@ public:
     }
     // realiza busca, retornando vetor de offsets que referenciam a palavra
     int * busca(char *palavra, int *quantidade) {
+        LS_REGISTRO* chave = busca_registroPorPalavra(palavra);
+        if(chave == NULL){
+            printf("Palavra nao encontrada....");
+            return NULL;
+        }
+        LI_REGISTRO r;
+        fseek(f,chave->lista_offset,SEEK_SET);
+        fread(&r,sizeof(LI_REGISTRO),1,f);
         // substituir pelo resultado da busca na lista invertida
-        quantidade[0] = 10;
-        int *offsets = new int[10];
-        int i = 0;
-        // exemplo: retornar os primeiros 10 offsets da palavra "terra"
-        offsets[i++] = 58;
-        offsets[i++] = 69;
-        offsets[i++] = 846;
-        offsets[i++] = 943;
-        offsets[i++] = 1083;
-        offsets[i++] = 1109;
-        offsets[i++] = 1569;
-        offsets[i++] = 1792;
-        offsets[i++] = 2041;
-        offsets[i++] = 2431;
+        quantidade[0] = chave->quantidade;
+        int *offsets = new int[*quantidade];
+        for(int i=0;i<quantidade[0];i++){
+            offsets[i] = r.offset;
+            fseek(f,r.prox,SEEK_SET);
+            fread(&r,sizeof(LI_REGISTRO),1,f);
+        }
+
         return offsets;
     }
 private:
@@ -181,12 +183,32 @@ private:
         return 1;
 
     }
+
+    LS_REGISTRO* busca_registroPorPalavra(char* palavra){
+            int cmp = strcmp(palavra,primeiro_registro->palavra);
+            if(cmp == 0)
+            {
+                //encontrou a palavra
+                return primeiro_registro;
+            }
+            LS_REGISTRO* aux =  primeiro_registro->prox;
+            while(aux!=NULL){
+                cmp = strcmp(palavra,aux->palavra);
+                if(cmp==0){
+                    return aux;
+                }else if(cmp<0){
+                    return NULL;
+                }
+                aux = aux->prox;
+            }
+            return NULL;
+    }
 };
 
 // programa principal
 int main(int argc, char** argv) {
     // abrir arquivo
-    ifstream in("biblia.txt");
+    ifstream in("biblia2.txt");
     if (!in.is_open()){
         printf("\n\n Nao consegui abrir arquivo biblia.txt. Sinto muito.\n\n\n\n");
     }
