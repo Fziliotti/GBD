@@ -1,0 +1,8 @@
+# depslib dependency file v1.0
+1621086650 source:c:\projetos\5periodo\gbd\gbd\atividade4\main.cpp
+	<iostream>
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<time.h>
+
